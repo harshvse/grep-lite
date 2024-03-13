@@ -1,48 +1,52 @@
-fn main() {
-    let context_lines = 2;
-    let search_term = "oo";
-    let quote = "Every face, every shop,
-bedroom window, public-house, and
-dark square is a picture
-feverishly turned--in search of what?
-It is the same with books.
-What do we seek
-through millions of pages?";
+extern crate clap;
+extern crate regex;
 
-    let mut tags: Vec<usize> = Vec::new();
-    let mut ctx: Vec<Vec<(usize, String)>> = Vec::new();
+use clap::{App, Arg};
+use regex::Regex;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use std::io::BufReader;
 
-    for (index, line) in quote.lines().enumerate(){
-        if line.contains(search_term) {
-            tags.push(index);
-        }
-
-        let v = Vec::with_capacity(2*context_lines + 1);
-        ctx.push(v);
-    }
-
-    if tags.len() == 0 {
-        return;
-    }
-    
-    for (index, line) in quote.lines().enumerate(){
-        for(j, tag) in tags.iter().enumerate(){
-            let lower_bound = tag.saturating_sub(context_lines);
-            let upper_bound = tag + context_lines;
-
-            if(index >= lower_bound) && (index <= upper_bound){
-                let line_as_string = String::from(line);
-                let local_ctx = (index, line_as_string);
-                ctx[j].push(local_ctx);
-            }
-        }
-    }
-
-    for local_ctx in ctx.iter(){
-        for &(index, ref line) in local_ctx.iter(){
-            let line_num = index + 1;
-            println!("{}: {}", line_num, line);
+fn process_line<T: BufRead + Sized>(reader: T, re: Regex) {
+    for line_ in reader.lines() {
+        let line = line_.unwrap();
+        match re.find(&line) {
+            Some(_) => println!("{:?}", line),
+            None => (),
         }
     }
 }
 
+fn main() {
+    let args = App::new("grep-lite")
+        .version("0.01")
+        .about("An app that work like grep with limited features")
+        .arg(
+            Arg::with_name("pattern")
+                .help("The pattern to search for")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("input")
+                .help("input file to search through")
+                .takes_value(true)
+                .required(false),
+        )
+        .get_matches();
+
+    let pattern = args.value_of("pattern").unwrap();
+    let search_pattern = Regex::new(pattern).unwrap();
+
+    let input = args.value_of("input").unwrap_or("-");
+    if input == "-" {
+        let stdin = io::stdin();
+        let reader = stdin.lock();
+        process_line(reader, search_pattern)
+    } else {
+        let f: File = File::open(input).unwrap();
+        let reader = BufReader::new(f);
+        process_line(reader, search_pattern)
+    }
+}
